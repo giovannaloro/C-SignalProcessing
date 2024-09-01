@@ -1,5 +1,6 @@
 #include <math.h>
 #include <time.h>
+#include <complex.h>
 
 //definition of field lenght in byte
 #define ChunkId_size 5
@@ -38,6 +39,11 @@ struct  Wave{
     int * data;
 };
 
+//The spectrum struct. It contains an array of complex number and the size of the array
+struct Spectrum{
+    double complex * values;
+    int size; 
+};
 
 //Support function to generate a random double between 0 and 1
 double generate_rand(){
@@ -163,27 +169,135 @@ void savewave(char * filename, struct Wave * signal){
     if (fpointer == NULL){
         perror("Unable to create the file");
     }
-        fwrite(&(signal->ChunkID), ChunkId_size - 1, 1, fpointer);
-        fwrite(&(signal->ChunkSize), ChunkSize_size, 1, fpointer);
-        fwrite(&(signal->Format), Format_size - 1, 1, fpointer);
-        fwrite(&(signal->Subchunk1ID), Subchunk1ID_size - 1 , 1, fpointer);
-        fwrite(&(signal->Subchunk1Size), Subchunk1Size_size, 1, fpointer);
-        fwrite(&(signal->AudioFormat), AudioFormat_size , 1, fpointer);
-        fwrite(&(signal->NumChannels), NumChannels_size , 1, fpointer);
-        fwrite(&(signal->SampleRate), SampleRate_size, 1, fpointer);
-        fwrite(&(signal->ByteRate), ByteRate_size, 1, fpointer);
-        fwrite(&(signal->BlockAlign), BlockAlign_size, 1, fpointer);
-        fwrite(&(signal->BitsPerSample), BitsPerSample_size, 1, fpointer);
-        fwrite(&(signal->Subchunk2ID), Subchunk2ID_size - 1, 1, fpointer);
-        fwrite(&(signal->Subchunk2Size), Subchunk2Size_size, 1, fpointer);
-        fwrite(signal->data, signal->Subchunk2Size, 1, fpointer);
+if (fwrite(&(signal->ChunkID), ChunkId_size - 1, 1, fpointer) != 1) {
+        perror("Error writing ChunkID");
         fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->ChunkSize), ChunkSize_size, 1, fpointer) != 1) {
+        perror("Error writing ChunkSize");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->Format), Format_size - 1, 1, fpointer) != 1) {
+        perror("Error writing Format");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->Subchunk1ID), Subchunk1ID_size - 1, 1, fpointer) != 1) {
+        perror("Error writing Subchunk1ID");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->Subchunk1Size), Subchunk1Size_size, 1, fpointer) != 1) {
+        perror("Error writing Subchunk1Size");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->AudioFormat), AudioFormat_size, 1, fpointer) != 1) {
+        perror("Error writing AudioFormat");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->NumChannels), NumChannels_size, 1, fpointer) != 1) {
+        perror("Error writing NumChannels");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->SampleRate), SampleRate_size, 1, fpointer) != 1) {
+        perror("Error writing SampleRate");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->ByteRate), ByteRate_size, 1, fpointer) != 1) {
+        perror("Error writing ByteRate");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->BlockAlign), BlockAlign_size, 1, fpointer) != 1) {
+        perror("Error writing BlockAlign");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->BitsPerSample), BitsPerSample_size, 1, fpointer) != 1) {
+        perror("Error writing BitsPerSample");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->Subchunk2ID), Subchunk2ID_size - 1, 1, fpointer) != 1) {
+        perror("Error writing Subchunk2ID");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(&(signal->Subchunk2Size), Subchunk2Size_size, 1, fpointer) != 1) {
+        perror("Error writing Subchunk2Size");
+        fclose(fpointer);
+        return;
+    }
+
+    if (fwrite(signal->data, signal->Subchunk2Size, 1, fpointer) != 1) {
+        perror("Error writing signal data");
+        fclose(fpointer);
+        return;
+    }
+
+    // Close the file
+    fclose(fpointer);
 }
 
 //This function creates random interference int the loaded wave 
 void random_interference(struct Wave * signal){
-    for(int i = 0; i < (signal->Subchunk2Size/4); i++){
+    for(int i = 0; i < (signal->Subchunk2Size/sizeof(int)); i++){
         int perturbed = round((*(signal->data + i) * generate_rand()) + *(signal->data + i) );
         (*(signal->data + i)) = perturbed;
     }
 }
+
+//This function perform a dft using the standard formula
+struct Spectrum dft(struct Wave * signal){
+    int N = (signal->Subchunk2Size/sizeof(int));
+    double complex * spectrum = malloc(N*sizeof(double complex));
+    for(int k = 0; k < N; k++ ){
+        double complex Xk =  {0.0f};
+        for(int n = 0; n < N ; n++ ){
+            double complex X0 = ((double)*(signal->data +n )) * cexp( (double)-2 * I * M_PI * (double)n * (double)k * ((double)1/((double)N)) ); 
+            Xk += X0;
+            }
+        spectrum[k] = Xk;
+    }
+    struct Spectrum output_fourier;
+    output_fourier.values = spectrum;
+    output_fourier.size = signal->Subchunk2Size/sizeof(int);
+    return output_fourier;
+}
+
+
+
+//This function perfom a dfat using the standard formula
+int * dfat(struct Spectrum * spectrum){
+    int K = spectrum->size;
+    int * signal_values = malloc(K*sizeof(int));
+    for(int n = 0; n < K ; n++ ){
+        double complex Xn = {0.0f};
+        for(int k = 0; k < spectrum->size ; k++ ){
+            double complex X0 = ((double complex)*(spectrum->values +k )) * cexp( (double)2 * I  * M_PI * (double)k * (double)n * ((double)1/((double)K))); 
+            Xn += X0;
+        }
+        Xn /= (double)(spectrum->size); 
+        signal_values[n] = (int)creal(Xn);
+    }
+    return signal_values;
+}
+
